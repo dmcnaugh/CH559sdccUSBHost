@@ -34,6 +34,9 @@ void processUart(){
 
 void sendProtocolMSG(unsigned char msgtype, unsigned short length, unsigned char type, unsigned char device, unsigned char endpoint, unsigned char __xdata *msgbuffer){
     unsigned short i;
+
+	return;
+
     putchar(0xFE);	
 	putchar(length);
 	putchar((unsigned char)(length>>8));
