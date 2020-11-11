@@ -57,9 +57,10 @@ void sendProtocolMSG(unsigned char msgtype, unsigned short length, unsigned char
 
 void sendHidPollMSG(unsigned char msgtype, unsigned short length, unsigned char type, unsigned char device, unsigned char endpoint, unsigned char __xdata *msgbuffer,unsigned char idVendorL,unsigned char idVendorH,unsigned char idProductL,unsigned char idProductH){
     unsigned short i;
+    unsigned short a = 0xFE;
 
 	if ((msgtype == 4) && (type == 6)) {
-		putchar(0xFE);	
+		putchar(a);	
 		// putchar(length);
 		// putchar((unsigned char)(length>>8));
 		// putchar(msgtype);
@@ -70,6 +71,14 @@ void sendHidPollMSG(unsigned char msgtype, unsigned short length, unsigned char 
 		// putchar(idVendorH);
 		// putchar(idProductL);
 		// putchar(idProductH);
+		for (i = 0; i < length; i++)
+		{
+			a += msgbuffer[i];
+		}
+		a += '\n';
+
+		msgbuffer[1] = 256 - (a % 256); // Zero total checksum in spare byte
+		
 		for (i = 0; i < length; i++)
 		{
 			putchar(msgbuffer[i]);
