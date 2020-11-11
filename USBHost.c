@@ -568,7 +568,7 @@ void pollHIDdevice()
 	 __xdata unsigned char s, hiddevice, len;
 	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++)
 	{
-		if(HIDdevice[hiddevice].connected){
+		if(HIDdevice[hiddevice].connected && HIDdevice[hiddevice].type == Usage_KEYBOARD){
 		selectHubPort(HIDdevice[hiddevice].rootHub, 0);
 		s = hostTransfer( USB_PID_IN << 4 | HIDdevice[hiddevice].endPoint & 0x7F, HIDdevice[hiddevice].endPoint & 0x80 ? bUH_R_TOG | bUH_T_TOG : 0, 0 );
 		if ( s == ERR_SUCCESS )
