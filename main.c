@@ -14,17 +14,21 @@ typedef unsigned char  __data             UINT8D;
 
 SBIT(LED, 0x90, 6);
 
+void resetInit() {
+    resetHubDevices(0);
+    resetHubDevices(1);
+    initUSB_Host();
+    DEBUG_OUT("Ready\n");
+	sendProtocolMSG(MSG_TYPE_STARTUP,0, 0x00, 0x00, 0x00, 0);
+}
+
 void main()
 {
     unsigned char s;
     initClock();
     initUART0(1500000, 1);
     DEBUG_OUT("Startup\n");
-    resetHubDevices(0);
-    resetHubDevices(1);
-    initUSB_Host();
-    DEBUG_OUT("Ready\n");
-	sendProtocolMSG(MSG_TYPE_STARTUP,0, 0x00, 0x00, 0x00, 0);
+    resetInit();
     while(1)
     {
         if(!(P4_IN & (1 << 6)))
