@@ -16,6 +16,7 @@ __code unsigned char GetDeviceStringRequest[] = 			{USB_REQ_TYP_IN, USB_GET_DESC
 __code unsigned char SetupSetUsbConfig[] = { USB_REQ_TYP_OUT, USB_SET_CONFIGURATION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 __code unsigned char  SetHIDIdleRequest[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INTERF, HID_SET_IDLE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+__code unsigned char  SetHIDSetReport[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INTERF, HID_SET_REPORT, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00};
 __code unsigned char  GetHIDReport[] = {USB_REQ_TYP_IN | USB_REQ_RECIP_INTERF, USB_GET_DESCRIPTOR, 0x00, USB_DESCR_TYP_REPORT, 0 /*interface*/, 0x00, 0xff, 0x00};
 
 __at(0x0000) unsigned char __xdata RxBuffer[MAX_PACKET_SIZE];
@@ -303,7 +304,7 @@ unsigned char hostCtrlTransfer(unsigned char __xdata *DataBuf, unsigned short *R
 			{
 				delayUs(200);
 				UH_TX_LEN = RemLen >= endpoint0Size ? endpoint0Size : RemLen;
-				//memcpy(TxBuffer, pBuf, UH_TX_LEN);
+				memcpy(TxBuffer, pBuf, UH_TX_LEN);
 				pBuf += UH_TX_LEN;
 				if (pBuf[1] == 0x09)
 				{
@@ -536,6 +537,18 @@ void resetHubDevices(unsigned char hubindex)
 	}
 }
 
+void setHIDkbLeds(unsigned char leds)
+{
+	 __xdata unsigned char hiddevice;
+	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++)
+	{
+		if(HIDdevice[hiddevice].connected && HIDdevice[hiddevice].type == Usage_KEYBOARD){
+			selectHubPort(HIDdevice[hiddevice].rootHub, 0);
+			setHIDDeviceReport(hiddevice, leds);
+		}
+	}
+}
+
 void pollHIDdevice()
 {
 	 __xdata unsigned char s, hiddevice, len;
@@ -713,6 +726,19 @@ void parseHIDDeviceReport(unsigned char __xdata *report, unsigned short length, 
 		};
 		i += size + 1;
 	}
+}
+
+unsigned char setHIDDeviceReport(unsigned char CurrentDevive, unsigned char leds)
+{
+ 	unsigned char s;
+	unsigned short len, i, reportLen = RECEIVE_BUFFER_LEN;
+	DEBUG_OUT("Sending report to interface %i\n", HIDdevice[CurrentDevive].interface);
+
+	fillTxBuffer(SetHIDSetReport, sizeof(SetHIDSetReport));
+	((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = HIDdevice[CurrentDevive].interface;	
+	((PXUSB_SETUP_REQ)TxBuffer)->wLengthL = 1;
+	receiveDataBuffer[0] = leds;
+	return(hostCtrlTransfer(receiveDataBuffer, &len, 0));
 }
 
 unsigned char getHIDDeviceReport(unsigned char CurrentDevive)

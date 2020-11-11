@@ -106,5 +106,7 @@ unsigned char checkRootHubConnections();
 
 void resetHubDevices(unsigned char hubindex);
 void pollHIDdevice();
+unsigned char setHIDDeviceReport(unsigned char CurrentDevive, unsigned char leds);
+void setHIDkbLeds(unsigned char leds);
 
 #endif
