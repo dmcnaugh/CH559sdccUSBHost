@@ -5,25 +5,39 @@
 #include "CH559.h"
 #include "util.h"
 #include "uart.h"
+#include "USBHost.h"
 
 uint8_t __xdata uartRxBuff[64];
 uint8_t __xdata rxPos = 0;
 
+extern void resetInit();
+extern void checkDeviceStatus();
 
 void processUart(){
     while(RI){
             RI=0;
             uartRxBuff[rxPos] = SBUF;
             if (uartRxBuff[rxPos]=='\n' || rxPos >= 64){
-                for (uint8_t i = 0; i < rxPos; i ++ )
-                    {
-                        printf( "0x%02X ",uartRxBuff[i]);
-                    }
-                    printf("\n");
-                if(uartRxBuff[0]=='k'){
+                // for (uint8_t i = 0; i < rxPos; i ++ )
+                //     {
+                //         printf( "0x%02X ",uartRxBuff[i]);
+                //     }
+                //     printf("\n");
+                if(uartRxBuff[0]==('I' + 0x80)) {
+					putchar('U');
+					checkDeviceStatus();
+					putchar('\n');
+				}
+                if(uartRxBuff[0]==('R' + 0x80)){
+					resetInit();
+				}
+                if(uartRxBuff[0]==('L' + 0x80)){
                 //if(uartRxBuff[1]==0x61)LED=0;
                 //if(uartRxBuff[1]==0x73)LED=1;
-                if(uartRxBuff[1]=='b')runBootloader();
+                // if(uartRxBuff[1]=='b')runBootloader();
+					// sendProtocolMSG(MSG_TYPE_ERROR,0, uartRxBuff[1], 0, 0xEE, 0);
+					// setHIDDeviceReport(0, uartRxBuff[1] & 0x1f);
+					setHIDkbLeds(uartRxBuff[1] & 0x1f);
                 }
             rxPos=0;
             }else{
