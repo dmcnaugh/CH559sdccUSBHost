@@ -537,6 +537,20 @@ void resetHubDevices(unsigned char hubindex)
 	}
 }
 
+void checkDeviceStatus() {
+	__xdata unsigned char hiddevice;
+	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++)
+	{
+		if(HIDdevice[hiddevice].connected && HIDdevice[hiddevice].type == Usage_KEYBOARD){
+			putchar('K');
+		} else if(HIDdevice[hiddevice].connected) {
+			putchar('?');
+		} else {
+			putchar('E');
+		}
+	}
+}
+
 void setHIDkbLeds(unsigned char leds)
 {
 	 __xdata unsigned char hiddevice;
