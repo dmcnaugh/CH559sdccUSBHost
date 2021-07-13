@@ -581,7 +581,7 @@ void pollHIDdevice()
 			if ( len )
 			{		
 				LED = !LED;	
-				//DEBUG_OUT("HID %lu, %i data %i : ", HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F);
+				DEBUG_OUT("HID %lu, %i data %i : ", HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F);
 				sendHidPollMSG(MSG_TYPE_DEVICE_POLL,len, HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F, RxBuffer,VendorProductID[HIDdevice[hiddevice].rootHub].idVendorL,VendorProductID[HIDdevice[hiddevice].rootHub].idVendorH,VendorProductID[HIDdevice[hiddevice].rootHub].idProductL,VendorProductID[HIDdevice[hiddevice].rootHub].idProductH);
 			}
 		}
@@ -931,7 +931,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 											HIDdevice[hiddevice].interface = currentInterface->bInterfaceNumber;
 											HIDdevice[hiddevice].rootHub = rootHubIndex;
 											HIDdevice[hiddevice].interval = d->bInterval;
-											DEBUG_OUT("Got endpoint for the HIDdevice 0x%02x\n", HIDdevice[hiddevice].endPoint);
+											DEBUG_OUT("Got endpoint for the HIDdevice 0x%02x : Interval %d\n", HIDdevice[hiddevice].endPoint, HIDdevice[hiddevice].interval);
 											getHIDDeviceReport(hiddevice);
 											if (HIDdevice[hiddevice].type == Usage_KEYBOARD) setProtocol(hiddevice, 0);
 										}
