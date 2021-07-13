@@ -509,6 +509,7 @@ struct
 	unsigned char interface;
 	unsigned char endPoint;
 	unsigned long type;
+	unsigned char interval;
 }  __xdata HIDdevice[MAX_HID_DEVICES];
 
 struct 
@@ -534,6 +535,7 @@ void resetHubDevices(unsigned char hubindex)
 	HIDdevice[hiddevice].interface  = 0;
 	HIDdevice[hiddevice].endPoint  = 0;
 	HIDdevice[hiddevice].type  = 0;
+	HIDdevice[hiddevice].interval  = 0;
 	}
 	}
 }
@@ -566,7 +568,7 @@ void setHIDkbLeds(unsigned char leds)
 
 void pollHIDdevice()
 {
-	 __xdata unsigned char s, hiddevice, len;
+	 __xdata unsigned char s, hiddevice, len, wait;
 	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++)
 	{
 		if(HIDdevice[hiddevice].connected && HIDdevice[hiddevice].type == Usage_KEYBOARD){
@@ -583,8 +585,11 @@ void pollHIDdevice()
 				sendHidPollMSG(MSG_TYPE_DEVICE_POLL,len, HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F, RxBuffer,VendorProductID[HIDdevice[hiddevice].rootHub].idVendorL,VendorProductID[HIDdevice[hiddevice].rootHub].idVendorH,VendorProductID[HIDdevice[hiddevice].rootHub].idProductL,VendorProductID[HIDdevice[hiddevice].rootHub].idProductH);
 			}
 		}
+		wait = wait < HIDdevice[hiddevice].interval ? HIDdevice[hiddevice].interval : wait; //max interval
 		}
 	}
+
+	delay(wait);
 }
 
 
@@ -925,6 +930,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 											HIDdevice[hiddevice].connected = 1;										
 											HIDdevice[hiddevice].interface = currentInterface->bInterfaceNumber;
 											HIDdevice[hiddevice].rootHub = rootHubIndex;
+											HIDdevice[hiddevice].interval = d->bInterval;
 											DEBUG_OUT("Got endpoint for the HIDdevice 0x%02x\n", HIDdevice[hiddevice].endPoint);
 											getHIDDeviceReport(hiddevice);
 											if (HIDdevice[hiddevice].type == Usage_KEYBOARD) setProtocol(hiddevice, 0);
