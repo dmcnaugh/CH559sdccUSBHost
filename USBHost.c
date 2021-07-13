@@ -18,6 +18,7 @@ __code unsigned char SetupSetUsbConfig[] = { USB_REQ_TYP_OUT, USB_SET_CONFIGURAT
 __code unsigned char  SetHIDIdleRequest[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INTERF, HID_SET_IDLE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 __code unsigned char  SetHIDSetReport[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INTERF, HID_SET_REPORT, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00};
 __code unsigned char  GetHIDReport[] = {USB_REQ_TYP_IN | USB_REQ_RECIP_INTERF, USB_GET_DESCRIPTOR, 0x00, USB_DESCR_TYP_REPORT, 0 /*interface*/, 0x00, 0xff, 0x00};
+__code unsigned char  SetProtocol[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INTERF, HID_SET_PROTOCOL, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 __at(0x0000) unsigned char __xdata RxBuffer[MAX_PACKET_SIZE];
 __at(0x0100) unsigned char __xdata TxBuffer[MAX_PACKET_SIZE];
@@ -755,6 +756,17 @@ unsigned char setHIDDeviceReport(unsigned char CurrentDevive, unsigned char leds
 	return(hostCtrlTransfer(receiveDataBuffer, &len, 0));
 }
 
+unsigned char setProtocol(unsigned char CurrentDevive, unsigned char protocol)
+{
+ 	unsigned char s;
+	unsigned short len, i, reportLen = RECEIVE_BUFFER_LEN;
+	DEBUG_OUT("Sending report to interface %i\n", HIDdevice[CurrentDevive].interface);
+
+	fillTxBuffer(SetProtocol, sizeof(SetProtocol));
+	((PXUSB_SETUP_REQ)TxBuffer)->wValueL = protocol;
+	return(hostCtrlTransfer(receiveDataBuffer, &len, 0));
+}
+
 unsigned char getHIDDeviceReport(unsigned char CurrentDevive)
 {
  	unsigned char s;
@@ -915,6 +927,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 											HIDdevice[hiddevice].rootHub = rootHubIndex;
 											DEBUG_OUT("Got endpoint for the HIDdevice 0x%02x\n", HIDdevice[hiddevice].endPoint);
 											getHIDDeviceReport(hiddevice);
+											if (HIDdevice[hiddevice].type == Usage_KEYBOARD) setProtocol(hiddevice, 0);
 										}
 									}
 									break;
