@@ -12,7 +12,7 @@ __code unsigned char GetDeviceDescriptorRequest[] = 		{USB_REQ_TYP_IN, USB_GET_D
 __code unsigned char GetConfigurationDescriptorRequest[] = 	{USB_REQ_TYP_IN, USB_GET_DESCRIPTOR, 0, USB_DESCR_TYP_CONFIG, 0, 0, sizeof(USB_DEV_DESCR), 0};
 __code unsigned char GetInterfaceDescriptorRequest[] = 		{USB_REQ_TYP_IN | USB_REQ_RECIP_INTERF, USB_GET_DESCRIPTOR, 0, USB_DESCR_TYP_INTERF, 0, 0, sizeof(USB_ITF_DESCR), 0};
 __code unsigned char SetUSBAddressRequest[] = 				{USB_REQ_TYP_OUT, USB_SET_ADDRESS, USB_DEVICE_ADDR, 0, 0, 0, 0, 0};
-__code unsigned char GetDeviceStringRequest[] = 			{USB_REQ_TYP_IN, USB_GET_DESCRIPTOR, 2, 3, 9, 4, 2, 4};	//todo change language
+__code unsigned char GetDeviceStringRequest[] = 			{USB_REQ_TYP_IN, USB_GET_DESCRIPTOR, 0, USB_DESCR_TYP_STRING, 9, 4, 2, 0};	//todo change language
 __code unsigned char SetupSetUsbConfig[] = { USB_REQ_TYP_OUT, USB_SET_CONFIGURATION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 __code unsigned char  SetHIDIdleRequest[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INTERF, HID_SET_IDLE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -387,9 +387,22 @@ unsigned char setUsbConfig( unsigned char cfg )
     return( hostCtrlTransfer(0, 0, 0) );            
 }
 
-unsigned char getDeviceString()
+unsigned char getDeviceString( unsigned char str )
 {
-    fillTxBuffer(GetDeviceStringRequest, sizeof(GetDeviceStringRequest));                         
+    unsigned char s;
+	PXUSB_SETUP_REQ pSetupReq = ((PXUSB_SETUP_REQ)TxBuffer);
+    fillTxBuffer(GetDeviceStringRequest, sizeof(GetDeviceStringRequest));
+    pSetupReq->wValueL = str;          
+
+	s = hostCtrlTransfer(receiveDataBuffer, 0, RECEIVE_BUFFER_LEN);
+
+    if (s != ERR_SUCCESS) return s;
+    DEBUG_OUT( "GetDeviceString length: %i\n" , receiveDataBuffer[0]);
+
+    fillTxBuffer(GetDeviceStringRequest, sizeof(GetDeviceStringRequest));
+    pSetupReq->wValueL = str;          
+    pSetupReq->wLengthL = receiveDataBuffer[0];          
+
     return hostCtrlTransfer(receiveDataBuffer, 0, RECEIVE_BUFFER_LEN);
 }
 
@@ -868,7 +881,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 			if ( s == ERR_SUCCESS )
 			{
 				rootHubDevice[rootHubIndex].address = addr;
-				s = getDeviceString();
+				s = getDeviceString(2);
 				{
 					DEBUG_OUT_USB_BUFFER(receiveDataBuffer);
 					if(convertStringDescriptor(receiveDataBuffer, receiveDataBuffer, RECEIVE_BUFFER_LEN,rootHubIndex))
