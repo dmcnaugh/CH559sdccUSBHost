@@ -14,7 +14,7 @@
 # on windows you need the zadig tool https://zadig.akeo.ie/ to install the right driver
 # click on Options and List all devices to show the USB Module, then install the libusb-win32 driver
 
-import usb.core, usb.util, sys, struct, traceback, platform
+import os, usb.core, usb.util, sys, struct, traceback, platform
 detect_chip_cmd_v1 = (0xa2, 0x13, 0x55, 0x53, 0x42, 0x20, 0x44, 0x42, 0x47, 0x20, 0x43, 0x48, 0x35, 0x35, 0x39, 0x20, 0x26, 0x20, 0x49, 0x53, 0x50, 0x00)
 detect_chip_cmd_v2 = (0xa1, 0x12, 0x00, 0x52, 0x11, 0x4d, 0x43, 0x55, 0x20, 0x49, 0x53, 0x50, 0x20, 0x26, 0x20, 0x57, 0x43, 0x48, 0x2e, 0x43, 0x4e)
 
@@ -104,7 +104,7 @@ def identchipv1():
     identanswer = sendcmd(detect_chip_cmd_v1)
     if len(identanswer) == 2:
         chipid = identanswer[0]
-        print('Found CH5' + str(chipid - 30))
+        print('V1 Found CH5' + str(chipid - 30))
         if chipid == 0x58:
             device_flash_size = 64
             device_erase_size = 11
@@ -115,7 +115,7 @@ def identchipv1():
         errorexit('ident chip')
     cfganswer = sendcmd((0xbb, 0x00))
     if len(cfganswer) == 2:
-        print('Bootloader version: ' + str((cfganswer[0] >> 4)) + '.' + str((cfganswer[0] & 0xf)))
+        print('V1 Bootloader version: ' + str((cfganswer[0] >> 4)) + '.' + str((cfganswer[0] & 0xf)))
     else:
         errorexit('ident bootloader')
 
@@ -124,7 +124,7 @@ def identchipv2():
     identanswer = sendcmd(detect_chip_cmd_v2)
     if len(identanswer) == 6:
         chipid = identanswer[4]
-        print('Found CH5' + str(chipid - 30))
+        print('V2 Found CH5' + str(chipid - 30))
         if chipid == 0x58:
             device_flash_size = 64
             device_erase_size = 11
@@ -135,7 +135,7 @@ def identchipv2():
         errorexit('ident chip')
     cfganswer = sendcmd((0xa7, 0x02, 0x00, 0x1f, 0x00))
     if len(cfganswer) == 30:
-        print('Bootloader version: ' + str(cfganswer[19]) + '.' + str(cfganswer[20]) + str(cfganswer[21]))
+        print('V2 Bootloader version: ' + str(cfganswer[19]) + '.' + str(cfganswer[20]) + str(cfganswer[21]))
         keyinputv2(cfganswer)
     else:
         errorexit('ident bootloader')
@@ -232,18 +232,19 @@ def writefilev2(fileName, mode):
     elif mode == mode_verify_v2:
         print('Verify success')
     
-if len(sys.argv) != 2:
-    errorexit('no bin file selected')   
+# if len(sys.argv) != 2:
+#     errorexit('no bin file selected')   
     
 if detectchipversion() == 0:
     identchipv1()
-    erasechipv1()
-    writefilev1(sys.argv[1], mode_write_v1)
-    writefilev1(sys.argv[1], mode_verify_v1)
+#    erasechipv1()
+#    writefilev1(sys.argv[1], mode_write_v1)
+#    writefilev1(sys.argv[1], mode_verify_v1)
     exitbootloaderv1()
 else:
     identchipv2()
-    erasechipv2()
-    writefilev2(sys.argv[1], mode_write_v2)
-    writefilev2(sys.argv[1], mode_verify_v2)
+    if (sys.argv[1] == "--flash" and os.path.exists(sys.argv[2])):
+        erasechipv2()
+        writefilev2(sys.argv[2], mode_write_v2)
+        writefilev2(sys.argv[2], mode_verify_v2)
     exitbootloaderv2()
