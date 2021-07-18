@@ -402,6 +402,7 @@ unsigned char getDeviceString( unsigned char str )
     fillTxBuffer(GetDeviceStringRequest, sizeof(GetDeviceStringRequest));
     pSetupReq->wValueL = str;          
     pSetupReq->wLengthL = receiveDataBuffer[0];          
+    DEBUG_OUT( "GetDeviceString getting whole string %i\n", str);
 
     return hostCtrlTransfer(receiveDataBuffer, 0, RECEIVE_BUFFER_LEN);
 }
@@ -842,6 +843,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 {
 	unsigned char retry, i, s = ERR_SUCCESS, cfg, dv_cls, addr;
 	unsigned char HIDDevice = 0;
+	unsigned char Prod, Man;
 
 	for(retry = 0; retry < 10; retry++) //todo test fewer retries
 	{
@@ -881,13 +883,26 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 			if ( s == ERR_SUCCESS )
 			{
 				rootHubDevice[rootHubIndex].address = addr;
-				s = getDeviceString(2);
-				{
+
+				Prod = ((PXUSB_DEV_DESCR)receiveDataBuffer)->iProduct;
+				Man = ((PXUSB_DEV_DESCR)receiveDataBuffer)->iManufacturer;
+				if (Prod) {
+					s = getDeviceString(Prod);
 					DEBUG_OUT_USB_BUFFER(receiveDataBuffer);
 					if(convertStringDescriptor(receiveDataBuffer, receiveDataBuffer, RECEIVE_BUFFER_LEN,rootHubIndex))
 					{
-						DEBUG_OUT("Device String: %s\n", receiveDataBuffer);
+						DEBUG_OUT("Device Product String: %s\n", receiveDataBuffer);
 					}
+				}
+				if (Man) {
+					s = getDeviceString(Man);
+					DEBUG_OUT_USB_BUFFER(receiveDataBuffer);
+					if(convertStringDescriptor(receiveDataBuffer, receiveDataBuffer, RECEIVE_BUFFER_LEN,rootHubIndex))
+					{
+						DEBUG_OUT("Device Manufacturer String: %s\n", receiveDataBuffer);
+					}
+				}
+				{
 					s = getConfigurationDescriptor();
 					if ( s == ERR_SUCCESS )
 					{
