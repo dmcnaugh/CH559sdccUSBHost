@@ -17,6 +17,8 @@ void processUart(){
     while(RI){
             RI=0;
             uartRxBuff[rxPos] = SBUF;
+			DEBUG_OUT("UART: '%c' [%02X]", uartRxBuff[rxPos], uartRxBuff[rxPos])
+			// if (uartRxBuff[rxPos]!='\n') uartRxBuff[rxPos] += 0x80;
             if (uartRxBuff[rxPos]=='\n' || rxPos >= 64){
                 // for (uint8_t i = 0; i < rxPos; i ++ )
                 //     {

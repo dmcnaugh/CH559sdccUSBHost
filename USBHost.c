@@ -12,7 +12,7 @@ __code unsigned char GetDeviceDescriptorRequest[] = 		{USB_REQ_TYP_IN, USB_GET_D
 __code unsigned char GetConfigurationDescriptorRequest[] = 	{USB_REQ_TYP_IN, USB_GET_DESCRIPTOR, 0, USB_DESCR_TYP_CONFIG, 0, 0, sizeof(USB_DEV_DESCR), 0};
 __code unsigned char GetInterfaceDescriptorRequest[] = 		{USB_REQ_TYP_IN | USB_REQ_RECIP_INTERF, USB_GET_DESCRIPTOR, 0, USB_DESCR_TYP_INTERF, 0, 0, sizeof(USB_ITF_DESCR), 0};
 __code unsigned char SetUSBAddressRequest[] = 				{USB_REQ_TYP_OUT, USB_SET_ADDRESS, USB_DEVICE_ADDR, 0, 0, 0, 0, 0};
-__code unsigned char GetDeviceStringRequest[] = 			{USB_REQ_TYP_IN, USB_GET_DESCRIPTOR, 2, 3, 9, 4, 2, 4};	//todo change language
+__code unsigned char GetDeviceStringRequest[] = 			{USB_REQ_TYP_IN, USB_GET_DESCRIPTOR, 0, USB_DESCR_TYP_STRING, 9, 4, 2, 0};	//todo change language
 __code unsigned char SetupSetUsbConfig[] = { USB_REQ_TYP_OUT, USB_SET_CONFIGURATION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 __code unsigned char  SetHIDIdleRequest[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INTERF, HID_SET_IDLE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -387,9 +387,23 @@ unsigned char setUsbConfig( unsigned char cfg )
     return( hostCtrlTransfer(0, 0, 0) );            
 }
 
-unsigned char getDeviceString()
+unsigned char getDeviceString( unsigned char str )
 {
-    fillTxBuffer(GetDeviceStringRequest, sizeof(GetDeviceStringRequest));                         
+    unsigned char s;
+	PXUSB_SETUP_REQ pSetupReq = ((PXUSB_SETUP_REQ)TxBuffer);
+    fillTxBuffer(GetDeviceStringRequest, sizeof(GetDeviceStringRequest));
+    pSetupReq->wValueL = str;          
+
+	s = hostCtrlTransfer(receiveDataBuffer, 0, RECEIVE_BUFFER_LEN);
+
+    if (s != ERR_SUCCESS) return s;
+    DEBUG_OUT( "GetDeviceString length: %i\n" , receiveDataBuffer[0]);
+
+    fillTxBuffer(GetDeviceStringRequest, sizeof(GetDeviceStringRequest));
+    pSetupReq->wValueL = str;          
+    pSetupReq->wLengthL = receiveDataBuffer[0];          
+    DEBUG_OUT( "GetDeviceString getting whole string %i\n", str);
+
     return hostCtrlTransfer(receiveDataBuffer, 0, RECEIVE_BUFFER_LEN);
 }
 
@@ -581,7 +595,7 @@ void pollHIDdevice()
 			if ( len )
 			{		
 				LED = !LED;	
-				//DEBUG_OUT("HID %lu, %i data %i : ", HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F);
+				DEBUG_OUT("HID %lu, %i data %i : ", HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F);
 				sendHidPollMSG(MSG_TYPE_DEVICE_POLL,len, HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F, RxBuffer,VendorProductID[HIDdevice[hiddevice].rootHub].idVendorL,VendorProductID[HIDdevice[hiddevice].rootHub].idVendorH,VendorProductID[HIDdevice[hiddevice].rootHub].idProductL,VendorProductID[HIDdevice[hiddevice].rootHub].idProductH);
 			}
 		}
@@ -829,6 +843,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 {
 	unsigned char retry, i, s = ERR_SUCCESS, cfg, dv_cls, addr;
 	unsigned char HIDDevice = 0;
+	unsigned char Prod, Man;
 
 	for(retry = 0; retry < 10; retry++) //todo test fewer retries
 	{
@@ -868,13 +883,26 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 			if ( s == ERR_SUCCESS )
 			{
 				rootHubDevice[rootHubIndex].address = addr;
-				s = getDeviceString();
-				{
+
+				Prod = ((PXUSB_DEV_DESCR)receiveDataBuffer)->iProduct;
+				Man = ((PXUSB_DEV_DESCR)receiveDataBuffer)->iManufacturer;
+				if (Prod) {
+					s = getDeviceString(Prod);
 					DEBUG_OUT_USB_BUFFER(receiveDataBuffer);
 					if(convertStringDescriptor(receiveDataBuffer, receiveDataBuffer, RECEIVE_BUFFER_LEN,rootHubIndex))
 					{
-						DEBUG_OUT("Device String: %s\n", receiveDataBuffer);
+						DEBUG_OUT("Device Product String: %s\n", receiveDataBuffer);
 					}
+				}
+				if (Man) {
+					s = getDeviceString(Man);
+					DEBUG_OUT_USB_BUFFER(receiveDataBuffer);
+					if(convertStringDescriptor(receiveDataBuffer, receiveDataBuffer, RECEIVE_BUFFER_LEN,rootHubIndex))
+					{
+						DEBUG_OUT("Device Manufacturer String: %s\n", receiveDataBuffer);
+					}
+				}
+				{
 					s = getConfigurationDescriptor();
 					if ( s == ERR_SUCCESS )
 					{
@@ -931,7 +959,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 											HIDdevice[hiddevice].interface = currentInterface->bInterfaceNumber;
 											HIDdevice[hiddevice].rootHub = rootHubIndex;
 											HIDdevice[hiddevice].interval = d->bInterval;
-											DEBUG_OUT("Got endpoint for the HIDdevice 0x%02x\n", HIDdevice[hiddevice].endPoint);
+											DEBUG_OUT("Got endpoint for the HIDdevice 0x%02x : Interval %d\n", HIDdevice[hiddevice].endPoint, HIDdevice[hiddevice].interval);
 											getHIDDeviceReport(hiddevice);
 											if (HIDdevice[hiddevice].type == Usage_KEYBOARD) setProtocol(hiddevice, 0);
 										}
