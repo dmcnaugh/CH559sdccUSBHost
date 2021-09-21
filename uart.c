@@ -8,32 +8,36 @@
 #include "USBHost.h"
 
 uint8_t __xdata uartRxBuff[64];
-uint8_t __xdata rxPos = 0;
+uint8_t rxPos = 0;
 
 extern void resetInit();
 extern void checkDeviceStatus();
 
 void processUart(){
+	register unsigned char c;
+
     while(RI){
             RI=0;
-            uartRxBuff[rxPos] = SBUF;
-			DEBUG_OUT("UART: '%c' [%02X]", uartRxBuff[rxPos], uartRxBuff[rxPos])
+			c = SBUF;
+            // uartRxBuff[rxPos] = SBUF;
+			// DEBUG_OUT("UART: '%c' [%02X]", uartRxBuff[rxPos], uartRxBuff[rxPos])
 			// if (uartRxBuff[rxPos]!='\n') uartRxBuff[rxPos] += 0x80;
-            if (uartRxBuff[rxPos]=='\n' || rxPos >= 64){
+            if (c =='\n' || rxPos >= 4){
                 // for (uint8_t i = 0; i < rxPos; i ++ )
                 //     {
                 //         printf( "0x%02X ",uartRxBuff[i]);
                 //     }
                 //     printf("\n");
-                if(uartRxBuff[0]==('I' + 0x80)) {
+				c = *uartRxBuff;
+                if(c==('I' + 0x80)) {
 					putchar('U');
 					checkDeviceStatus();
 					putchar('\n');
 				}
-                if(uartRxBuff[0]==('R' + 0x80)){
+                else if(c==('R' + 0x80)){
 					resetInit();
 				}
-                if(uartRxBuff[0]==('L' + 0x80)){
+                else if(c==('L' + 0x80)){
                 //if(uartRxBuff[1]==0x61)LED=0;
                 //if(uartRxBuff[1]==0x73)LED=1;
                 // if(uartRxBuff[1]=='b')runBootloader();
@@ -41,9 +45,11 @@ void processUart(){
 					// setHIDDeviceReport(0, uartRxBuff[1] & 0x1f);
 					setHIDkbLeds(uartRxBuff[1] & 0x1f);
                 }
-            rxPos=0;
+            	rxPos=0;
+				*uartRxBuff = 0;
             }else{
-            rxPos++;
+				uartRxBuff[rxPos] = c;
+				rxPos++;
             }
         }
 }
