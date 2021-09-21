@@ -12,6 +12,7 @@ uint8_t rxPos = 0;
 
 extern void resetInit();
 extern void checkDeviceStatus();
+extern void showDeviceInfo();
 
 void processUart(){
 	register unsigned char c;
@@ -32,6 +33,11 @@ void processUart(){
                 if(c==('I' + 0x80)) {
 					putchar('U');
 					checkDeviceStatus();
+					putchar('\n');
+				}
+                else if(c==('D' + 0x80)) {
+					putchar('E');
+					showDeviceInfo();
 					putchar('\n');
 				}
                 else if(c==('R' + 0x80)){

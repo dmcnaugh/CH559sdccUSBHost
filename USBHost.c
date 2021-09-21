@@ -532,6 +532,8 @@ struct
     unsigned long idVendorH;
     unsigned long idProductL;
     unsigned long idProductH;
+	char manufacturer[129];
+	char product[129];
 }  __xdata VendorProductID[2];
 
 void resetHubDevices(unsigned char hubindex)
@@ -541,6 +543,8 @@ void resetHubDevices(unsigned char hubindex)
     VendorProductID[hubindex].idVendorH = 0;
     VendorProductID[hubindex].idProductL = 0;
     VendorProductID[hubindex].idProductH = 0;
+	VendorProductID[hubindex].manufacturer[0] = 0;
+	VendorProductID[hubindex].product[0] = 0;
 	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++)
 	{
 	if(HIDdevice[hiddevice].rootHub == hubindex){
@@ -555,7 +559,7 @@ void resetHubDevices(unsigned char hubindex)
 }
 
 void checkDeviceStatus() {
-	__xdata unsigned char hiddevice;
+	register unsigned char hiddevice;
 	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++)
 	{
 		if(HIDdevice[hiddevice].connected && HIDdevice[hiddevice].type == Usage_KEYBOARD){
@@ -568,9 +572,15 @@ void checkDeviceStatus() {
 	}
 }
 
+void showDeviceInfo() {
+
+	printf("0x%02lx%02lx:0x%02lx%02lx", VendorProductID[0].idVendorH, VendorProductID[0].idVendorL, VendorProductID[0].idProductH, VendorProductID[0].idProductL);
+	printf(" - %s %s", VendorProductID[0].manufacturer, VendorProductID[0].product);
+}
+
 void setHIDkbLeds(unsigned char leds)
 {
-	 __xdata unsigned char hiddevice;
+	register unsigned char hiddevice;
 	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++)
 	{
 		if(HIDdevice[hiddevice].connected && HIDdevice[hiddevice].type == Usage_KEYBOARD){
@@ -877,6 +887,8 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
     		VendorProductID[rootHubIndex].idVendorH = ((PXUSB_DEV_DESCR)receiveDataBuffer)->idVendorH;
     		VendorProductID[rootHubIndex].idProductL = ((PXUSB_DEV_DESCR)receiveDataBuffer)->idProductL;
     		VendorProductID[rootHubIndex].idProductH = ((PXUSB_DEV_DESCR)receiveDataBuffer)->idProductH;
+			DEBUG_OUT( "DEV 0x%02x%02x:0x%02x%02x\n", ((PXUSB_DEV_DESCR)receiveDataBuffer)->idVendorH,((PXUSB_DEV_DESCR)receiveDataBuffer)->idVendorL,((PXUSB_DEV_DESCR)receiveDataBuffer)->idProductH,((PXUSB_DEV_DESCR)receiveDataBuffer)->idProductL);
+			DEBUG_OUT( "DEV 0x%02lx%02lx:0x%02lx%02lx\n", VendorProductID[rootHubIndex].idVendorH,VendorProductID[rootHubIndex].idVendorL,VendorProductID[rootHubIndex].idProductH,VendorProductID[rootHubIndex].idProductL);
 			DEBUG_OUT_USB_BUFFER(receiveDataBuffer);
 			addr = rootHubIndex + ((PUSB_SETUP_REQ)SetUSBAddressRequest)->wValueL; //todo wValue always 2.. does another id work?
 			s = setUsbAddress(addr);
@@ -892,6 +904,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 					if(convertStringDescriptor(receiveDataBuffer, receiveDataBuffer, RECEIVE_BUFFER_LEN,rootHubIndex))
 					{
 						DEBUG_OUT("Device Product String: %s\n", receiveDataBuffer);
+						strncpy(VendorProductID[rootHubIndex].product, receiveDataBuffer, 128);
 					}
 				}
 				if (Man) {
@@ -900,6 +913,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 					if(convertStringDescriptor(receiveDataBuffer, receiveDataBuffer, RECEIVE_BUFFER_LEN,rootHubIndex))
 					{
 						DEBUG_OUT("Device Manufacturer String: %s\n", receiveDataBuffer);
+						strncpy(VendorProductID[rootHubIndex].manufacturer, receiveDataBuffer, 128);
 					}
 				}
 				{
