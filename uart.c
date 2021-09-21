@@ -7,6 +7,12 @@
 #include "uart.h"
 #include "USBHost.h"
 
+#define MAJOR 0x02
+#define MINOR 0x00
+#define PATCH 0x00
+
+const unsigned char version[] = { 0xAA, 0x55, 'V', 'E', 'R', MAJOR, MINOR, PATCH };
+
 uint8_t __xdata uartRxBuff[64];
 uint8_t rxPos = 0;
 
@@ -33,11 +39,19 @@ void processUart(){
                 if(c==('I' + 0x80)) {
 					putchar('U');
 					checkDeviceStatus();
+					putchar('V');
 					putchar('\n');
 				}
                 else if(c==('D' + 0x80)) {
 					putchar('E');
 					showDeviceInfo();
+					putchar('\n');
+				}
+                else if(c==('V' + 0x80)) {
+					putchar('W');
+					putchar(MAJOR + 0x80);
+					putchar(MINOR + 0x80);
+					putchar(PATCH + 0x80);
 					putchar('\n');
 				}
                 else if(c==('R' + 0x80)){
