@@ -136,8 +136,11 @@ class CHflasher:
             sys.exit()
         try:
             dev.reset()
-            if dev.is_kernel_driver_active(0):
-                dev.detach_kernel_driver(0)
+            try:
+                if dev.is_kernel_driver_active(0):
+                    dev.detach_kernel_driver(0)
+            except (NotImplementedError, usb.core.USBError):
+                pass  # macOS/Windows don't implement or need this
             dev.set_configuration()
         except usb.core.USBError as ex:
             print('Could not access USB Device')
