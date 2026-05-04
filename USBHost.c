@@ -1095,6 +1095,99 @@ unsigned char initializeHub(unsigned char rootHubIndex)
 	return ERR_SUCCESS;
 }
 
+/*
+ * detachDownstream: the hub reported the downstream device went away.
+ * Clear its HIDdevice slot and the rootHubDevice downstream-* fields.
+ * Caller must be in hub-control context; we don't switch it here.
+ */
+void detachDownstream(unsigned char rootHubIndex)
+{
+	unsigned char hiddevice;
+	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++) {
+		if (HIDdevice[hiddevice].connected && HIDdevice[hiddevice].rootHub == rootHubIndex) {
+			HIDdevice[hiddevice].connected = 0;
+			HIDdevice[hiddevice].rootHub   = 0;
+			HIDdevice[hiddevice].interface = 0;
+			HIDdevice[hiddevice].endPoint  = 0;
+			HIDdevice[hiddevice].type      = 0;
+			HIDdevice[hiddevice].interval  = 0;
+		}
+	}
+	rootHubDevice[rootHubIndex].downstreamAddress = 0;
+	rootHubDevice[rootHubIndex].downstreamPort    = 0;
+	rootHubDevice[rootHubIndex].prePid            = 0;
+}
+
+/*
+ * pollHubStatus: for each installed hub, briefly switch to hub context and
+ * poll its interrupt-IN endpoint. On port status-change, acknowledge via
+ * ClearPortFeature and dispatch attach/detach.
+ *
+ * Leaves USB context as whatever attach/detach last set; the next
+ * selectHubPort call (via pollHIDdevice) restores the keyboard context.
+ */
+void pollHubStatus()
+{
+	unsigned char rootHubIndex;
+	unsigned char s, port;
+	unsigned short len;
+	unsigned char endp;
+	unsigned char statusBitmap;
+	unsigned char wPortStatusL, wPortChangeL;
+
+	for (rootHubIndex = 0; rootHubIndex < ROOT_HUB_COUNT; rootHubIndex++) {
+		if (!rootHubDevice[rootHubIndex].hubInstalled) continue;
+		endp = rootHubDevice[rootHubIndex].hubIntEndpoint;
+		if (endp == 0) continue;
+
+		// Switch to hub context
+		setHostUsbAddr(rootHubIndex + 2);
+		USB_CTRL &= ~bUC_LOW_SPEED;
+		UH_SETUP &= ~bUH_PRE_PID_EN;
+
+		// Poll interrupt endpoint (1-byte status bitmap for hubs <= 7 ports)
+		s = hostTransfer(USB_PID_IN << 4 | (endp & 0x7F),
+		                 (endp & 0x80) ? (bUH_R_TOG | bUH_T_TOG) : 0,
+		                 0);
+		if (s != ERR_SUCCESS) continue;
+
+		rootHubDevice[rootHubIndex].hubIntEndpoint ^= 0x80;
+		len = USB_RX_LEN;
+		if (len == 0) continue;
+
+		statusBitmap = RxBuffer[0];
+
+		for (port = 1; port <= rootHubDevice[rootHubIndex].hubNbrPorts; port++) {
+			if (!(statusBitmap & (1 << port))) continue;
+
+			// Read wPortStatus + wPortChange (4 bytes)
+			fillTxBuffer(GetPortStatusReq, sizeof(GetPortStatusReq));
+			((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = port;
+			s = hostCtrlTransfer(receiveDataBuffer, &len, 4);
+			if (s != ERR_SUCCESS) continue;
+			wPortStatusL = receiveDataBuffer[0];
+			wPortChangeL = receiveDataBuffer[2];
+
+			if (wPortChangeL & 0x01) {  // C_PORT_CONNECTION
+				// Acknowledge while still in hub context
+				fillTxBuffer(ClearPortFeatureReq, sizeof(ClearPortFeatureReq));
+				((PXUSB_SETUP_REQ)TxBuffer)->wValueL = HUB_C_PORT_CONNECTION;
+				((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = port;
+				hostCtrlTransfer(0, 0, 0);
+
+				if ((wPortStatusL & HUB_PORT_STATUS_CONNECTION)
+				    && rootHubDevice[rootHubIndex].downstreamAddress == 0) {
+					attachDownstream(rootHubIndex, port);
+				} else if (!(wPortStatusL & HUB_PORT_STATUS_CONNECTION)
+				           && rootHubDevice[rootHubIndex].downstreamPort == port) {
+					detachDownstream(rootHubIndex);
+				}
+				break;  // handle one port change per poll cycle
+			}
+		}
+	}
+}
+
 unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 {
 	unsigned char retry, i, s = ERR_SUCCESS, dv_cls, addr;

@@ -32,6 +32,7 @@ void main()
             runBootloader();
         processUart();
         s = checkRootHubConnections();
+        pollHubStatus();
         pollHIDdevice();
     }
 }
