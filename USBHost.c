@@ -67,7 +67,7 @@ void initUSB_Host()
 
 void setHostUsbAddr(unsigned char addr)
 {
-	USB_DEV_AD = USB_DEV_AD & bUDA_GP_BIT | addr & 0x7F;
+	USB_DEV_AD = (USB_DEV_AD & bUDA_GP_BIT) | (addr & 0x7F);
 }
 
 void setUsbSpeed(unsigned char fullSpeed)
@@ -88,15 +88,15 @@ void resetRootHubPort(unsigned char rootHubIndex)
 	setUsbSpeed(1);
 	 if (rootHubIndex == 0)    
     {
-        UHUB0_CTRL = UHUB0_CTRL & ~ bUH_LOW_SPEED | bUH_BUS_RESET;
+        UHUB0_CTRL = (UHUB0_CTRL & ~bUH_LOW_SPEED) | bUH_BUS_RESET;
         delay(15);
-        UHUB0_CTRL = UHUB0_CTRL & ~ bUH_BUS_RESET;
+        UHUB0_CTRL = UHUB0_CTRL & ~bUH_BUS_RESET;
     }
     else if (rootHubIndex == 1)
     {
-        UHUB1_CTRL = UHUB1_CTRL & ~ bUH_LOW_SPEED | bUH_BUS_RESET;
+        UHUB1_CTRL = (UHUB1_CTRL & ~bUH_LOW_SPEED) | bUH_BUS_RESET;
         delay(15);
-        UHUB1_CTRL = UHUB1_CTRL & ~ bUH_BUS_RESET;
+        UHUB1_CTRL = UHUB1_CTRL & ~bUH_BUS_RESET;
     }
 	delayUs(250);
 	UIF_DETECT = 0; //todo test if redundant                                       
