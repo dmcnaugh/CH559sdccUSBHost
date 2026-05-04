@@ -9,7 +9,7 @@
 
 #define MAJOR 0x02
 #define MINOR 0x00
-#define PATCH 0x01
+#define PATCH 0x02
 
 const unsigned char version[] = { 0xAA, 0x55, 'V', 'E', 'R', MAJOR, MINOR, PATCH };
 
