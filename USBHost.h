@@ -1,7 +1,7 @@
 #ifndef __USBHOST_H__
 #define __USBHOST_H__
 
-#define ROOT_HUB_COUNT  2
+#define ROOT_HUB_COUNT  1
 
 #define MAX_EXHUB_PORT_COUNT    4
 #define EXHUB_PORT_NONE         0xff

@@ -38,9 +38,6 @@ void disableRootHubPort(unsigned char index)
 {
 	rootHubDevice[index].status = ROOT_DEVICE_DISCONNECT;
 	rootHubDevice[index].address = 0;
-	if (index)
-	UHUB1_CTRL = 0;
-	else
 	UHUB0_CTRL = 0;
 }
 
@@ -59,7 +56,6 @@ void initUSB_Host()
 	USB_INT_FG = 0xFF;
 
 	disableRootHubPort(0);
-	disableRootHubPort(1);
 	USB_INT_EN = bUIE_TRANSFER | bUIE_DETECT;
 }
 
@@ -81,23 +77,15 @@ void setUsbSpeed(unsigned char fullSpeed)
 
 void resetRootHubPort(unsigned char rootHubIndex)
 {
-	endpoint0Size = DEFAULT_ENDP0_SIZE; //todo what's that?                    
+	(void)rootHubIndex;
+	endpoint0Size = DEFAULT_ENDP0_SIZE; //todo what's that?
 	setHostUsbAddr(0);
 	setUsbSpeed(1);
-	 if (rootHubIndex == 0)    
-    {
-        UHUB0_CTRL = (UHUB0_CTRL & ~bUH_LOW_SPEED) | bUH_BUS_RESET;
-        delay(15);
-        UHUB0_CTRL = UHUB0_CTRL & ~bUH_BUS_RESET;
-    }
-    else if (rootHubIndex == 1)
-    {
-        UHUB1_CTRL = (UHUB1_CTRL & ~bUH_LOW_SPEED) | bUH_BUS_RESET;
-        delay(15);
-        UHUB1_CTRL = UHUB1_CTRL & ~bUH_BUS_RESET;
-    }
+	UHUB0_CTRL = (UHUB0_CTRL & ~bUH_LOW_SPEED) | bUH_BUS_RESET;
+	delay(15);
+	UHUB0_CTRL = UHUB0_CTRL & ~bUH_BUS_RESET;
 	delayUs(250);
-	UIF_DETECT = 0; //todo test if redundant                                       
+	UIF_DETECT = 0; //todo test if redundant
 }
 
 unsigned char enableRootHubPort(unsigned char rootHubIndex)
@@ -106,39 +94,19 @@ unsigned char enableRootHubPort(unsigned char rootHubIndex)
     {
         rootHubDevice[ rootHubIndex ].status = 1;
     }
-	if (rootHubIndex == 0)
+	if (USB_HUB_ST & bUHS_H0_ATTACH)
 	{
-		if (USB_HUB_ST & bUHS_H0_ATTACH)
+		if ((UHUB0_CTRL & bUH_PORT_EN) == 0x00)
 		{
-			if ((UHUB0_CTRL & bUH_PORT_EN) == 0x00)
+			if (USB_HUB_ST & bUHS_DM_LEVEL)
 			{
-				if (USB_HUB_ST & bUHS_DM_LEVEL)
-				{
-					rootHubDevice[rootHubIndex].speed = 0;
-					UHUB0_CTRL |= bUH_LOW_SPEED;
-				}
-				else rootHubDevice[rootHubIndex].speed = 1;
+				rootHubDevice[rootHubIndex].speed = 0;
+				UHUB0_CTRL |= bUH_LOW_SPEED;
 			}
-			UHUB0_CTRL |= bUH_PORT_EN;
-			return ERR_SUCCESS;
+			else rootHubDevice[rootHubIndex].speed = 1;
 		}
-	}
-	else if (rootHubIndex == 1)
-	{
-		if (USB_HUB_ST & bUHS_H1_ATTACH)
-		{
-			if ((UHUB1_CTRL & bUH_PORT_EN ) == 0x00)
-			{
-				if (USB_HUB_ST & bUHS_HM_LEVEL)
-				{
-					rootHubDevice[rootHubIndex].speed = 0;
-					UHUB1_CTRL |= bUH_LOW_SPEED;
-				}
-				else rootHubDevice[rootHubIndex].speed = 1;
-			}
-			UHUB1_CTRL |= bUH_PORT_EN;
-			return ERR_SUCCESS;
-		}
+		UHUB0_CTRL |= bUH_PORT_EN;
+		return ERR_SUCCESS;
 	}
 	return ERR_USB_DISCON;
 }
@@ -1038,27 +1006,6 @@ unsigned char checkRootHubConnections()
 				disableRootHubPort(0);
 				DEBUG_OUT("Device at root hub %i disconnected\n", 0);
 					sendProtocolMSG(MSG_TYPE_DISCONNECTED,0, 0x01, 0x01, 0x01, 0);
-				s = ERR_USB_DISCON;
-			}
-			if(USB_HUB_ST & bUHS_H1_ATTACH)
-			{
-				
-				if(rootHubDevice[1].status == ROOT_DEVICE_DISCONNECT || (UHUB1_CTRL & bUH_PORT_EN) == 0x00)
-				{
-					disableRootHubPort(1);	//todo really need to reset register?
-					rootHubDevice[1].status = ROOT_DEVICE_CONNECTED;
-					DEBUG_OUT("Device at root hub %i connected\n", 1);
-					sendProtocolMSG(MSG_TYPE_CONNECTED,0, 0x02, 0x02, 0x02, 0);
-					s = initializeRootHubConnection(1);
-				}
-			}
-			else
-			if(rootHubDevice[1].status >= ROOT_DEVICE_CONNECTED)
-			{
-    			resetHubDevices(1);
-				disableRootHubPort(1);
-				DEBUG_OUT("Device at root hub %i disconnected\n", 1);
-					sendProtocolMSG(MSG_TYPE_DISCONNECTED,0, 0x02, 0x02, 0x02, 0);
 				s = ERR_USB_DISCON;
 			}
 	}

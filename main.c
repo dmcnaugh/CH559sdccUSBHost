@@ -14,7 +14,6 @@ typedef unsigned char  __data             UINT8D;
 
 void resetInit() {
     resetHubDevices(0);
-    resetHubDevices(1);
     initUSB_Host();
     DEBUG_OUT("Ready\n");
 	sendProtocolMSG(MSG_TYPE_STARTUP,0, 0x00, 0x00, 0x00, 0);
