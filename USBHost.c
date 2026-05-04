@@ -989,11 +989,19 @@ unsigned char attachDownstream(unsigned char rootHubIndex, unsigned char port)
 	((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = port;
 	hostCtrlTransfer(0, 0, 0);
 
-	// Switch host engine to default address with downstream's speed
+	// Switch host engine to default address. For an LS device behind an FS
+	// hub, the SIE encodes the transaction at LS (bUC_LOW_SPEED=1) while the
+	// PHY/root port stays FS (UHUB0_CTRL.bUH_LOW_SPEED=0, untouched here);
+	// bUH_PRE_PID_EN prepends the PRE PID at FS so the hub knows to forward
+	// the next packet at LS.
 	setHostUsbAddr(0);
-	USB_CTRL &= ~bUC_LOW_SPEED;       // bus stays FS to the hub
-	if (downstreamLowSpeed) UH_SETUP |= bUH_PRE_PID_EN;
-	else                    UH_SETUP &= ~bUH_PRE_PID_EN;
+	if (downstreamLowSpeed) {
+		USB_CTRL |= bUC_LOW_SPEED;
+		UH_SETUP |= bUH_PRE_PID_EN;
+	} else {
+		USB_CTRL &= ~bUC_LOW_SPEED;
+		UH_SETUP &= ~bUH_PRE_PID_EN;
+	}
 	endpoint0Size = DEFAULT_ENDP0_SIZE;
 
 	// Get device descriptor from address 0
@@ -1009,7 +1017,10 @@ unsigned char attachDownstream(unsigned char rootHubIndex, unsigned char port)
 	s = setUsbAddress(devAddr);
 	if (s != ERR_SUCCESS) return s;
 
-	// Switch rootHubDevice context to the downstream device
+	// Switch rootHubDevice context to the downstream device.
+	// .speed feeds setUsbSpeed (LS sets bUC_LOW_SPEED so the SIE encodes the
+	// transaction at LS). prePid then layers PRE-PID on top to bridge through
+	// the FS hub. UHUB0_CTRL.bUH_LOW_SPEED stays 0 — the PHY/root port is FS.
 	rootHubDevice[rootHubIndex].address           = devAddr;
 	rootHubDevice[rootHubIndex].speed             = downstreamLowSpeed ? 0 : 1;
 	rootHubDevice[rootHubIndex].prePid            = downstreamLowSpeed;
