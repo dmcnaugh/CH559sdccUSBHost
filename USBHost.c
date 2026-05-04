@@ -889,6 +889,7 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 						unsigned short i, total;
 						unsigned char __xdata temp[512];
 						PXUSB_ITF_DESCR currentInterface = 0;
+						unsigned char isBootKeyboard = 0;
 						int interfaces;
 						//DEBUG_OUT_USB_BUFFER(receiveDataBuffer);
 						for(i = 0; i < receiveDataBuffer[2] + (receiveDataBuffer[3] << 8); i++)
@@ -919,11 +920,14 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 									//DEBUG_OUT_USB_BUFFER(desc);
 									currentInterface = ((PXUSB_ITF_DESCR)desc);
 									readInterface(rootHubIndex, currentInterface);
+									isBootKeyboard = (currentInterface->bInterfaceClass    == USB_DEV_CLASS_HID
+									               && currentInterface->bInterfaceSubClass == 0x01    // boot
+									               && currentInterface->bInterfaceProtocol == 0x01);  // keyboard
 									break;
 								case USB_DESCR_TYP_ENDP:
 									DEBUG_OUT("Endpoint descriptor found\n", desc[1]);
 									DEBUG_OUT_USB_BUFFER(desc);
-									if(currentInterface->bInterfaceClass == USB_DEV_CLASS_HID)
+									if(isBootKeyboard)
 									{
 										PXUSB_ENDP_DESCR d = (PXUSB_ENDP_DESCR)desc;
 										if(d->bEndpointAddress & 0x80){
@@ -934,13 +938,13 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 											}
 											DEBUG_OUT("Connected device at position: %i\n", hiddevice);
 											HIDdevice[hiddevice].endPoint = d->bEndpointAddress;
-											HIDdevice[hiddevice].connected = 1;										
+											HIDdevice[hiddevice].connected = 1;
 											HIDdevice[hiddevice].interface = currentInterface->bInterfaceNumber;
 											HIDdevice[hiddevice].rootHub = rootHubIndex;
 											HIDdevice[hiddevice].interval = d->bInterval;
 											DEBUG_OUT("Got endpoint for the HIDdevice 0x%02x : Interval %d\n", HIDdevice[hiddevice].endPoint, HIDdevice[hiddevice].interval);
 											getHIDDeviceReport(hiddevice);
-											if (HIDdevice[hiddevice].type == Usage_KEYBOARD) setProtocol(hiddevice, 0);
+											setProtocol(hiddevice, 0);
 										}
 									}
 									break;
