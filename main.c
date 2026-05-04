@@ -12,8 +12,6 @@ typedef unsigned char  __data             UINT8D;
 #include "USBHost.h"
 #include "uart.h"
 
-SBIT(LED, 0x90, 6);
-
 void resetInit() {
     resetHubDevices(0);
     resetHubDevices(1);

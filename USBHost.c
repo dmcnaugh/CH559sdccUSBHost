@@ -4,8 +4,6 @@
 #include "uart.h"
 #include <string.h>
 
-SBIT(LED, 0x90, 6);
-
 typedef const unsigned char __code *PUINT8C;
 
 __code unsigned char GetDeviceDescriptorRequest[] = 		{USB_REQ_TYP_IN, USB_GET_DESCRIPTOR, 0, USB_DESCR_TYP_DEVICE , 0, 0, sizeof(USB_DEV_DESCR), 0};
@@ -603,8 +601,7 @@ void pollHIDdevice()
     		HIDdevice[hiddevice].endPoint ^= 0x80;
 			len = USB_RX_LEN;
 			if ( len )
-			{		
-				LED = !LED;	
+			{
 				DEBUG_OUT("HID %lu, %i data %i : ", HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F);
 				sendHidPollMSG(MSG_TYPE_DEVICE_POLL,len, HIDdevice[hiddevice].type, hiddevice, HIDdevice[hiddevice].endPoint & 0x7F, RxBuffer,VendorProductID[HIDdevice[hiddevice].rootHub].idVendorL,VendorProductID[HIDdevice[hiddevice].rootHub].idVendorH,VendorProductID[HIDdevice[hiddevice].rootHub].idProductL,VendorProductID[HIDdevice[hiddevice].rootHub].idProductH);
 			}
