@@ -18,6 +18,23 @@ __code unsigned char  SetHIDSetReport[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INT
 __code unsigned char  GetHIDReport[] = {USB_REQ_TYP_IN | USB_REQ_RECIP_INTERF, USB_GET_DESCRIPTOR, 0x00, USB_DESCR_TYP_REPORT, 0 /*interface*/, 0x00, 0xff, 0x00};
 __code unsigned char  SetProtocol[] = {USB_REQ_TYP_CLASS | USB_REQ_RECIP_INTERF, HID_SET_PROTOCOL, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
+#ifndef USB_DEV_CLASS_HUB
+#define USB_DEV_CLASS_HUB           0x09
+#endif
+#define HUB_DESCR_TYPE              0x29
+#define HUB_PORT_FEATURE_RESET      4
+#define HUB_PORT_FEATURE_POWER      8
+#define HUB_C_PORT_CONNECTION       16
+#define HUB_C_PORT_RESET            20
+#define HUB_PORT_STATUS_CONNECTION  0x01
+#define HUB_PORT_STATUS_LOW_SPEED   0x02   /* high byte bit 1 = bit 9 of wPortStatus */
+
+__code unsigned char GetHubDescriptorReq[]  = { 0xA0, 0x06, 0x00, 0x29, 0, 0, 0x40, 0 };
+__code unsigned char SetPortPowerReq[]      = { 0x23, 0x03, HUB_PORT_FEATURE_POWER, 0, 1, 0, 0, 0 };
+__code unsigned char SetPortResetReq[]      = { 0x23, 0x03, HUB_PORT_FEATURE_RESET, 0, 1, 0, 0, 0 };
+__code unsigned char GetPortStatusReq[]     = { 0xA3, 0x00, 0,                     0, 1, 0, 4, 0 };
+__code unsigned char ClearPortFeatureReq[]  = { 0x23, 0x01, 0,                     0, 1, 0, 0, 0 };
+
 __at(0x0000) unsigned char __xdata RxBuffer[MAX_PACKET_SIZE];
 __at(0x0100) unsigned char __xdata TxBuffer[MAX_PACKET_SIZE];
 
@@ -32,12 +49,24 @@ struct _RootHubDevice
 	unsigned char status;
 	unsigned char address;
 	unsigned char speed;
+	unsigned char prePid;             // 1 if downstream LS keyboard behind FS hub
+	unsigned char hubInstalled;       // 1 if a hub is on this root port
+	unsigned char hubIntEndpoint;     // hub's interrupt-IN endpoint address
+	unsigned char hubNbrPorts;        // hub's downstream port count
+	unsigned char downstreamAddress;  // 0 if no keyboard, else its USB address
+	unsigned char downstreamPort;     // hub port the keyboard sits on
 } __xdata rootHubDevice[ROOT_HUB_COUNT];
 
 void disableRootHubPort(unsigned char index)
 {
-	rootHubDevice[index].status = ROOT_DEVICE_DISCONNECT;
-	rootHubDevice[index].address = 0;
+	rootHubDevice[index].status            = ROOT_DEVICE_DISCONNECT;
+	rootHubDevice[index].address           = 0;
+	rootHubDevice[index].prePid            = 0;
+	rootHubDevice[index].hubInstalled      = 0;
+	rootHubDevice[index].hubIntEndpoint    = 0;
+	rootHubDevice[index].hubNbrPorts       = 0;
+	rootHubDevice[index].downstreamAddress = 0;
+	rootHubDevice[index].downstreamPort    = 0;
 	UHUB0_CTRL = 0;
 }
 
@@ -114,8 +143,12 @@ unsigned char enableRootHubPort(unsigned char rootHubIndex)
 void selectHubPort(unsigned char rootHubIndex, unsigned char HubPortIndex)
 {
 	unsigned char temp = HubPortIndex;
-        setHostUsbAddr(rootHubDevice[rootHubIndex].address); //todo ever != 0
-        setUsbSpeed(rootHubDevice[rootHubIndex].speed); //isn't that set before?
+	setHostUsbAddr(rootHubDevice[rootHubIndex].address);
+	setUsbSpeed(rootHubDevice[rootHubIndex].speed);
+	if (rootHubDevice[rootHubIndex].prePid)
+		UH_SETUP |= bUH_PRE_PID_EN;
+	else
+		UH_SETUP &= ~bUH_PRE_PID_EN;
 }
 
 unsigned char hostTransfer(unsigned char endp_pid, unsigned char tog, unsigned short timeout )
@@ -921,6 +954,147 @@ unsigned char enumerateKeyboardOnAddress(unsigned char rootHubIndex)
 	return ERR_SUCCESS;
 }
 
+/*
+ * attachDownstream: a device has been detected on hub port `port`.
+ * Caller must already be in hub-control context (USB_DEV_AD = hub address,
+ * USB_CTRL FS, no PRE-PID). Resets the port, learns LS/FS, switches host
+ * context to address 0, fetches device descriptor, assigns a new address,
+ * updates rootHubDevice to point at the downstream device, and runs the
+ * standard keyboard enumeration helper.
+ */
+unsigned char attachDownstream(unsigned char rootHubIndex, unsigned char port)
+{
+	unsigned char s;
+	unsigned char downstreamLowSpeed;
+	unsigned char devAddr = rootHubIndex + 4;
+	unsigned short len;
+
+	// Reset the port
+	fillTxBuffer(SetPortResetReq, sizeof(SetPortResetReq));
+	((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = port;
+	s = hostCtrlTransfer(0, 0, 0);
+	if (s != ERR_SUCCESS) return s;
+	delay(50);
+
+	// Read port status to learn LS vs FS (bit 9 of wPortStatus)
+	fillTxBuffer(GetPortStatusReq, sizeof(GetPortStatusReq));
+	((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = port;
+	s = hostCtrlTransfer(receiveDataBuffer, &len, 4);
+	if (s != ERR_SUCCESS) return s;
+	downstreamLowSpeed = (receiveDataBuffer[1] & 0x02) ? 1 : 0;
+
+	// Acknowledge the C_PORT_RESET change
+	fillTxBuffer(ClearPortFeatureReq, sizeof(ClearPortFeatureReq));
+	((PXUSB_SETUP_REQ)TxBuffer)->wValueL = HUB_C_PORT_RESET;
+	((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = port;
+	hostCtrlTransfer(0, 0, 0);
+
+	// Switch host engine to default address with downstream's speed
+	setHostUsbAddr(0);
+	USB_CTRL &= ~bUC_LOW_SPEED;       // bus stays FS to the hub
+	if (downstreamLowSpeed) UH_SETUP |= bUH_PRE_PID_EN;
+	else                    UH_SETUP &= ~bUH_PRE_PID_EN;
+	endpoint0Size = DEFAULT_ENDP0_SIZE;
+
+	// Get device descriptor from address 0
+	s = getDeviceDescriptor();
+	if (s != ERR_SUCCESS) return s;
+
+	VendorProductID[rootHubIndex].idVendorL  = ((PXUSB_DEV_DESCR)receiveDataBuffer)->idVendorL;
+	VendorProductID[rootHubIndex].idVendorH  = ((PXUSB_DEV_DESCR)receiveDataBuffer)->idVendorH;
+	VendorProductID[rootHubIndex].idProductL = ((PXUSB_DEV_DESCR)receiveDataBuffer)->idProductL;
+	VendorProductID[rootHubIndex].idProductH = ((PXUSB_DEV_DESCR)receiveDataBuffer)->idProductH;
+
+	// Assign address; setUsbAddress also updates USB_DEV_AD
+	s = setUsbAddress(devAddr);
+	if (s != ERR_SUCCESS) return s;
+
+	// Switch rootHubDevice context to the downstream device
+	rootHubDevice[rootHubIndex].address           = devAddr;
+	rootHubDevice[rootHubIndex].speed             = downstreamLowSpeed ? 0 : 1;
+	rootHubDevice[rootHubIndex].prePid            = downstreamLowSpeed;
+	rootHubDevice[rootHubIndex].downstreamAddress = devAddr;
+	rootHubDevice[rootHubIndex].downstreamPort    = port;
+
+	return enumerateKeyboardOnAddress(rootHubIndex);
+}
+
+/*
+ * initializeHub: caller has just set the hub's address, speed=FS, prePid=0
+ * in rootHubDevice. We fetch its config descriptor (to learn its int-IN
+ * endpoint), set its configuration, fetch the hub descriptor (for nbrPorts),
+ * power all ports, then scan for an already-connected device.
+ *
+ * No-device-on-port is success; hot-plug detection will pick up later
+ * connections via pollHubStatus.
+ */
+unsigned char initializeHub(unsigned char rootHubIndex)
+{
+	unsigned char s, port, cfg;
+	unsigned short len, total, i;
+	unsigned char nbrPorts;
+	unsigned char hubIntEndpoint = 0;
+
+	s = getConfigurationDescriptor();
+	if (s != ERR_SUCCESS) return s;
+
+	cfg = ((PXUSB_CFG_DESCR)receiveDataBuffer)->bConfigurationValue;
+	total = ((PXUSB_CFG_DESCR)receiveDataBuffer)->wTotalLengthL +
+	        (((PXUSB_CFG_DESCR)receiveDataBuffer)->wTotalLengthH << 8);
+
+	// Find the interrupt-IN endpoint in the config descriptor
+	i = ((PXUSB_CFG_DESCR)receiveDataBuffer)->bLength;
+	while (i < total) {
+		unsigned char __xdata *desc = &(receiveDataBuffer[i]);
+		if (desc[1] == USB_DESCR_TYP_ENDP) {
+			PXUSB_ENDP_DESCR d = (PXUSB_ENDP_DESCR)desc;
+			if (d->bEndpointAddress & 0x80) {
+				hubIntEndpoint = d->bEndpointAddress;
+				break;
+			}
+		}
+		i += desc[0];
+	}
+
+	s = setUsbConfig(cfg);
+	if (s != ERR_SUCCESS) return s;
+
+	// Fetch hub descriptor for nbrPorts
+	fillTxBuffer(GetHubDescriptorReq, sizeof(GetHubDescriptorReq));
+	s = hostCtrlTransfer(receiveDataBuffer, &len, RECEIVE_BUFFER_LEN);
+	if (s != ERR_SUCCESS) return s;
+	nbrPorts = receiveDataBuffer[2];
+	DEBUG_OUT("Hub: %d ports, int endpoint 0x%02X\n", nbrPorts, hubIntEndpoint);
+
+	// Power every port
+	for (port = 1; port <= nbrPorts; port++) {
+		fillTxBuffer(SetPortPowerReq, sizeof(SetPortPowerReq));
+		((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = port;
+		hostCtrlTransfer(0, 0, 0);
+	}
+	delay(100);   // PwrOn2PwrGood
+
+	// Record hub state
+	rootHubDevice[rootHubIndex].hubInstalled      = 1;
+	rootHubDevice[rootHubIndex].hubIntEndpoint    = hubIntEndpoint;
+	rootHubDevice[rootHubIndex].hubNbrPorts       = nbrPorts;
+	rootHubDevice[rootHubIndex].downstreamAddress = 0;
+	rootHubDevice[rootHubIndex].downstreamPort    = 0;
+
+	// Scan for already-connected device
+	for (port = 1; port <= nbrPorts; port++) {
+		fillTxBuffer(GetPortStatusReq, sizeof(GetPortStatusReq));
+		((PXUSB_SETUP_REQ)TxBuffer)->wIndexL = port;
+		s = hostCtrlTransfer(receiveDataBuffer, &len, 4);
+		if (s == ERR_SUCCESS && (receiveDataBuffer[0] & HUB_PORT_STATUS_CONNECTION)) {
+			(void)attachDownstream(rootHubIndex, port);
+			break;   // first wins
+		}
+	}
+
+	return ERR_SUCCESS;
+}
+
 unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 {
 	unsigned char retry, i, s = ERR_SUCCESS, dv_cls, addr;
@@ -965,9 +1139,17 @@ unsigned char initializeRootHubConnection(unsigned char rootHubIndex)
 			if ( s == ERR_SUCCESS )
 			{
 				rootHubDevice[rootHubIndex].address = addr;
-				s = enumerateKeyboardOnAddress(rootHubIndex);
-				if (s == ERR_SUCCESS)
-					return ERR_SUCCESS;
+				rootHubDevice[rootHubIndex].prePid  = 0;
+				if (dv_cls == USB_DEV_CLASS_HUB) {
+					rootHubDevice[rootHubIndex].speed = 1;   // hubs are FS
+					s = initializeHub(rootHubIndex);
+					if (s == ERR_SUCCESS)
+						return ERR_SUCCESS;
+				} else {
+					s = enumerateKeyboardOnAddress(rootHubIndex);
+					if (s == ERR_SUCCESS)
+						return ERR_SUCCESS;
+				}
 			}
 		}
 		DEBUG_OUT( "Error = %02X\n", s);
