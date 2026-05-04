@@ -592,7 +592,7 @@ void setHIDkbLeds(unsigned char leds)
 
 void pollHIDdevice()
 {
-	 __xdata unsigned char s, hiddevice, len, wait;
+	 __xdata unsigned char s, hiddevice, len, wait = 0;
 	for (hiddevice = 0; hiddevice < MAX_HID_DEVICES; hiddevice++)
 	{
 		if(HIDdevice[hiddevice].connected && HIDdevice[hiddevice].type == Usage_KEYBOARD){
